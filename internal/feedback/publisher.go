@@ -230,9 +230,13 @@ func (p *Publisher) DrainOnce(ctx context.Context) error {
 		return nil
 	}
 
-	if _, err := p.buffer.drain(ctx, func(seq uint64, ev *taskpb.TaskStateEvent) error {
+	drained, err := p.buffer.drain(ctx, func(seq uint64, ev *taskpb.TaskStateEvent) error {
 		return p.publishEvent(ctx, ev)
-	}); err != nil {
+	})
+	if drained > 0 {
+		p.counters.Add(metrics.EventsDrained, int64(drained))
+	}
+	if err != nil {
 		return err
 	}
 	for {

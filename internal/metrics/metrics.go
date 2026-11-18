@@ -12,6 +12,7 @@ import (
 // Canonical counter names.
 const (
 	OrdersReceived    = "orders_received"
+	TasksCreated      = "tasks_created"
 	OrdersDeduped     = "orders_deduped"
 	Quarantined       = "quarantined"
 	TasksAssigned     = "tasks_assigned"

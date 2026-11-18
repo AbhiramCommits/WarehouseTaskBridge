@@ -54,12 +54,15 @@ func NewNATSIngester(conn *nats.Conn, js nats.JetStreamContext, acceptor *Accept
 	}, nil
 }
 
-// EnsureStream creates the WMS_IN stream and durable pull consumer when absent.
-// It is safe to call on every start.
-func (n *NATSIngester) EnsureStream() error {
-	_, err := n.js.StreamInfo(StreamName)
+// EnsureOrderStream creates the WMS_IN order stream when absent. It is exported
+// so harnesses can publish before the bridge's consumer exists.
+func EnsureOrderStream(js nats.JetStreamContext) error {
+	if js == nil {
+		return errors.New("ingest: nil JetStream context")
+	}
+	_, err := js.StreamInfo(StreamName)
 	if errors.Is(err, nats.ErrStreamNotFound) {
-		_, err = n.js.AddStream(&nats.StreamConfig{
+		_, err = js.AddStream(&nats.StreamConfig{
 			Name:       StreamName,
 			Subjects:   []string{OrderSubject},
 			Storage:    nats.FileStorage,
@@ -70,9 +73,19 @@ func (n *NATSIngester) EnsureStream() error {
 		if err != nil {
 			return fmt.Errorf("ingest: create stream %s: %w", StreamName, err)
 		}
-		n.logger.Info("jetstream stream created", "stream", StreamName, "subjects", OrderSubject)
-	} else if err != nil {
+		return nil
+	}
+	if err != nil {
 		return fmt.Errorf("ingest: inspect stream %s: %w", StreamName, err)
+	}
+	return nil
+}
+
+// EnsureStream creates the WMS_IN stream and durable pull consumer when absent.
+// It is safe to call on every start.
+func (n *NATSIngester) EnsureStream() error {
+	if err := EnsureOrderStream(n.js); err != nil {
+		return err
 	}
 
 	if _, err := n.js.ConsumerInfo(StreamName, IngestDurable); errors.Is(err, nats.ErrConsumerNotFound) {

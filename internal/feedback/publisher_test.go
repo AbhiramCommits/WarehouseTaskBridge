@@ -294,6 +294,9 @@ func TestPublisherHonorsPeerSilence(t *testing.T) {
 	if stats := p.Stats(); stats.Buffered != 3 || stats.Drained != 3 || stats.Gaps != 0 {
 		t.Fatalf("stats after recovery = %+v", stats)
 	}
+	if got := counters.Get(metrics.EventsDrained); got != 3 {
+		t.Fatalf("events_drained = %d, want 3", got)
+	}
 	if err := p.DrainOnce(context.Background()); err != nil {
 		t.Fatalf("no-op drain: %v", err)
 	}

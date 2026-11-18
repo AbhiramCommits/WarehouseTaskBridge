@@ -121,6 +121,7 @@ func (a *Acceptor) AcceptOrder(ctx context.Context, subject string, raw []byte) 
 	}
 
 	if created {
+		a.metrics.Inc(metrics.TasksCreated)
 		a.report.Add(warnings...)
 		return AcceptResult{TaskID: taskID, OrderRef: task.OrderRef, Created: true, Warnings: warnings}, nil
 	}
