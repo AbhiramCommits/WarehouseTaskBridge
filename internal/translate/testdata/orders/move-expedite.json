@@ -1,0 +1,11 @@
+{
+  "order_ref": "ORD-2003",
+  "kind": "relocate",
+  "priority_band": "EXPEDITE",
+  "source_location": "G-3-2",
+  "dest_location": "C-1-1",
+  "qty": 1,
+  "due_by": "2026-01-20T08:00:00Z",
+  "schema_version": "2025-01-15",
+  "idempotency_key": "idem-ord-2003"
+}

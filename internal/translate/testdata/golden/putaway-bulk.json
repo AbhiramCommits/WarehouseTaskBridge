@@ -1,0 +1,14 @@
+{
+  "id": "00000000-0000-4000-8000-000000000000",
+  "orderRef": "ORD-2002",
+  "taskType": "PUT",
+  "priority": 90,
+  "zone": "BULK",
+  "sourceSlot": "B-2-1",
+  "destSlot": "N-8-2",
+  "quantity": 12,
+  "state": "PENDING",
+  "createdAt": "2024-01-01T00:00:00Z",
+  "updatedAt": "2024-01-01T00:00:00Z",
+  "idempotencyKey": "idem-ord-2002"
+}

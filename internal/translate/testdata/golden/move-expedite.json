@@ -1,0 +1,14 @@
+{
+  "id": "00000000-0000-4000-8000-000000000000",
+  "orderRef": "ORD-2003",
+  "taskType": "MOVE",
+  "priority": 10,
+  "zone": "RESERVE",
+  "sourceSlot": "G-3-2",
+  "destSlot": "C-1-1",
+  "quantity": 1,
+  "state": "PENDING",
+  "createdAt": "2024-01-01T00:00:00Z",
+  "updatedAt": "2024-01-01T00:00:00Z",
+  "idempotencyKey": "idem-ord-2003"
+}

@@ -1,0 +1,10 @@
+{
+  "order_ref": "ORD-2004",
+  "kind": "kitting",
+  "priority_band": "TURBO",
+  "source_location": "T-2-2",
+  "dest_location": "A-1-1",
+  "qty": 2,
+  "schema_version": "2025-01-15",
+  "idempotency_key": "idem-ord-2004"
+}

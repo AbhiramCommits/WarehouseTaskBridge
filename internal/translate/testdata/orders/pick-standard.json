@@ -1,0 +1,15 @@
+{
+  "order_ref": "ORD-2001",
+  "kind": "pick",
+  "priority_band": "STANDARD",
+  "source_location": "A-12-3",
+  "dest_location": "D-4-1",
+  "qty": 4,
+  "due_by": "2026-02-01T10:00:00Z",
+  "client_meta": {
+    "purchase_order": "PO-88121",
+    "customer": "ACME"
+  },
+  "schema_version": "2025-01-15",
+  "idempotency_key": "idem-ord-2001"
+}

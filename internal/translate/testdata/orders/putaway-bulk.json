@@ -1,0 +1,11 @@
+{
+  "order_ref": "ORD-2002",
+  "kind": "stow",
+  "priority_band": "BULK",
+  "source_location": "B-2-1",
+  "dest_location": "N-8-2",
+  "qty": 12,
+  "due_by": "2026-02-03T18:30:00Z",
+  "schema_version": "2024-06-01",
+  "idempotency_key": "idem-ord-2002"
+}
