@@ -17,9 +17,11 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/local/warehousetaskbridge/internal/config"
+	"github.com/local/warehousetaskbridge/internal/feedback"
 	"github.com/local/warehousetaskbridge/internal/ingest"
 	"github.com/local/warehousetaskbridge/internal/metrics"
 	"github.com/local/warehousetaskbridge/internal/peer"
+	"github.com/local/warehousetaskbridge/internal/sim"
 	"github.com/local/warehousetaskbridge/internal/store"
 	"github.com/local/warehousetaskbridge/internal/translate"
 )
@@ -98,6 +100,44 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
+	if err := feedback.EnsureStatusStream(js); err != nil {
+		return err
+	}
+	sender, err := feedback.NewNATSSender(js)
+	if err != nil {
+		return err
+	}
+	publisher, err := feedback.NewPublisher(feedback.Config{
+		Outbox:       db,
+		Sender:       sender,
+		Gate:         watcher,
+		Metrics:      counters,
+		Logger:       logger,
+		PollInterval: 50 * time.Millisecond,
+	})
+	if err != nil {
+		return err
+	}
+
+	engine, err := sim.NewEngine(db, sim.Config{
+		BotCount:     cfg.BotCount,
+		SpeedFactor:  cfg.SimSpeedFactor,
+		FailureRate:  cfg.SimFailureRate,
+		Seed:         cfg.SimSeed,
+		TickInterval: 100 * time.Millisecond,
+		Metrics:      counters,
+		Logger:       logger,
+	})
+	if err != nil {
+		return err
+	}
+	if err := engine.EnsureFleet(startCtx); err != nil {
+		return err
+	}
+	if _, err := engine.Recover(startCtx); err != nil {
+		return err
+	}
+
 	handler := ingest.NewHTTPHandler(ingest.HTTPConfig{
 		Store:    db,
 		Acceptor: acceptor,
@@ -127,6 +167,8 @@ func run(logger *slog.Logger) error {
 	})
 	group.Go(func() error { return natsIngest.Run(gctx) })
 	group.Go(func() error { return heartbeat.Run(gctx) })
+	group.Go(func() error { return publisher.Run(gctx) })
+	group.Go(func() error { return engine.Run(gctx) })
 	group.Go(func() error {
 		watcher.Run(gctx, cfg.PeerSilenceTimeout/4)
 		return nil

@@ -17,6 +17,9 @@ const (
 	DefaultHeartbeatInterval  = 2 * time.Second
 	DefaultPeerSilenceTimeout = 6 * time.Second
 	DefaultBotCount           = 6
+	DefaultSimSpeedFactor     = 20.0
+	DefaultSimFailureRate     = 0.05
+	DefaultSimSeed            = 42
 )
 
 // Config is the fully resolved runtime configuration.
@@ -34,6 +37,12 @@ type Config struct {
 	PeerSilenceTimeout time.Duration
 	// BotCount is the size of the simulated bot fleet.
 	BotCount int
+	// SimSpeedFactor divides simulated handling time; higher is faster.
+	SimSpeedFactor float64
+	// SimFailureRate is the probability a simulated task fails and requeues.
+	SimFailureRate float64
+	// SimSeed makes simulated failure decisions reproducible.
+	SimSeed int64
 }
 
 // Load reads configuration from the environment. It returns an error for
@@ -46,6 +55,9 @@ func Load() (Config, error) {
 		HeartbeatInterval:  DefaultHeartbeatInterval,
 		PeerSilenceTimeout: DefaultPeerSilenceTimeout,
 		BotCount:           DefaultBotCount,
+		SimSpeedFactor:     DefaultSimSpeedFactor,
+		SimFailureRate:     DefaultSimFailureRate,
+		SimSeed:            DefaultSimSeed,
 	}
 
 	var err error
@@ -58,6 +70,17 @@ func Load() (Config, error) {
 	if cfg.BotCount, err = envInt("BOT_COUNT", DefaultBotCount); err != nil {
 		return Config{}, err
 	}
+	if cfg.SimSpeedFactor, err = envFloat("SIM_SPEED_FACTOR", DefaultSimSpeedFactor); err != nil {
+		return Config{}, err
+	}
+	if cfg.SimFailureRate, err = envFloat("SIM_FAILURE_RATE", DefaultSimFailureRate); err != nil {
+		return Config{}, err
+	}
+	seed, err := envInt("SIM_SEED", DefaultSimSeed)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.SimSeed = int64(seed)
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -87,6 +110,12 @@ func (c Config) Validate() error {
 	if c.BotCount <= 0 {
 		return fmt.Errorf("config: BOT_COUNT must be positive, got %d", c.BotCount)
 	}
+	if c.SimSpeedFactor <= 0 {
+		return fmt.Errorf("config: SIM_SPEED_FACTOR must be positive, got %f", c.SimSpeedFactor)
+	}
+	if c.SimFailureRate < 0 || c.SimFailureRate > 1 {
+		return fmt.Errorf("config: SIM_FAILURE_RATE must be within [0,1], got %f", c.SimFailureRate)
+	}
 	return nil
 }
 
@@ -107,6 +136,18 @@ func envDuration(key string, def time.Duration) (time.Duration, error) {
 		return 0, fmt.Errorf("config: malformed duration %s=%q: %w", key, raw, err)
 	}
 	return d, nil
+}
+
+func envFloat(key string, def float64) (float64, error) {
+	raw, ok := os.LookupEnv(key)
+	if !ok || raw == "" {
+		return def, nil
+	}
+	f, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, fmt.Errorf("config: malformed float %s=%q: %w", key, raw, err)
+	}
+	return f, nil
 }
 
 func envInt(key string, def int) (int, error) {

@@ -449,3 +449,152 @@ type BotRecord struct {
 	BusyUntil time.Time
 	Status    string
 }
+
+// ErrTransitionConflict is returned when a task is not in the expected state.
+var ErrTransitionConflict = errors.New("store: task state conflict")
+
+// TransitionTask atomically updates a task and appends its outbox event in a
+// single transaction. It returns the new task_events seq. If the task is not in
+// fromState, the update is rejected and no event is written.
+func (s *Store) TransitionTask(ctx context.Context, taskID string, from, to taskpb.TaskState, botID, reason string, at time.Time) (uint64, error) {
+	var seq uint64
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var orderRef string
+		var assignedBot *string
+		if botID != "" && to != taskpb.TaskState_PENDING {
+			assignedBot = &botID
+		}
+		err := tx.QueryRow(ctx, `
+			UPDATE tasks
+			SET state = $2,
+			    assigned_bot_id = CASE
+			        WHEN $2 = 'PENDING' THEN NULL
+			        WHEN $3::text IS NOT NULL THEN $3
+			        ELSE assigned_bot_id
+			    END,
+			    updated_at = $4
+			WHERE id = $1 AND state = $5
+			RETURNING order_ref`,
+			taskID, taskpb.TaskState_name[int32(to)], assignedBot, at,
+			taskpb.TaskState_name[int32(from)]).Scan(&orderRef)
+		if errors.Is(err, pgx.ErrNoRows) {
+			var current string
+			lookupErr := tx.QueryRow(ctx, `SELECT state FROM tasks WHERE id = $1`, taskID).Scan(&current)
+			if errors.Is(lookupErr, pgx.ErrNoRows) {
+				return ErrTaskNotFound
+			}
+			if lookupErr != nil {
+				return fmt.Errorf("store: inspect task state: %w", lookupErr)
+			}
+			return fmt.Errorf("%w: task %s is %s, expected %s", ErrTransitionConflict, taskID, current, from)
+		}
+		if err != nil {
+			return fmt.Errorf("store: update task state: %w", err)
+		}
+		err = tx.QueryRow(ctx, `
+			INSERT INTO task_events (task_id, order_ref, from_state, to_state, bot_id, reason, emitted_at)
+			VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7)
+			RETURNING seq`,
+			taskID, orderRef, taskpb.TaskState_name[int32(from)],
+			taskpb.TaskState_name[int32(to)], botID, reason, at).Scan(&seq)
+		if err != nil {
+			return fmt.Errorf("store: append task event: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return seq, nil
+}
+
+// UnpublishedEvents returns outbox events that have not been acknowledged by
+// the WMS, in ascending seq order.
+func (s *Store) UnpublishedEvents(ctx context.Context, limit int) ([]*taskpb.TaskStateEvent, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT seq, task_id, order_ref, from_state, to_state,
+		       COALESCE(bot_id, ''), reason, emitted_at
+		FROM task_events
+		WHERE published = false
+		ORDER BY seq ASC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("store: list unpublished events: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*taskpb.TaskStateEvent
+	for rows.Next() {
+		var (
+			seq                             uint64
+			taskID, orderRef, from, to, bot string
+			reason                          string
+			emittedAt                       time.Time
+		)
+		if err := rows.Scan(&seq, &taskID, &orderRef, &from, &to, &bot, &reason, &emittedAt); err != nil {
+			return nil, fmt.Errorf("store: scan unpublished event: %w", err)
+		}
+		out = append(out, &taskpb.TaskStateEvent{
+			Seq:       seq,
+			TaskId:    taskID,
+			OrderRef:  orderRef,
+			FromState: stateFromName(from),
+			ToState:   stateFromName(to),
+			BotId:     bot,
+			Reason:    reason,
+			EmittedAt: timestamppbNew(emittedAt),
+		})
+	}
+	return out, rows.Err()
+}
+
+// MarkPublished marks one outbox event as delivered. It is idempotent.
+func (s *Store) MarkPublished(ctx context.Context, seq uint64) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE task_events SET published = true WHERE seq = $1`, seq)
+	if err != nil {
+		return fmt.Errorf("store: mark event published: %w", err)
+	}
+	return nil
+}
+
+// CountUnpublished returns how many outbox events are still awaiting delivery.
+func (s *Store) CountUnpublished(ctx context.Context) (int64, error) {
+	var n int64
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM task_events WHERE published = false`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store: count unpublished events: %w", err)
+	}
+	return n, nil
+}
+
+// stateFromName converts a persisted state name to its enum value.
+func stateFromName(name string) taskpb.TaskState {
+	if v, ok := taskpb.TaskState_value[name]; ok {
+		return taskpb.TaskState(v)
+	}
+	return taskpb.TaskState_TASK_STATE_UNSPECIFIED
+}
+
+// ListActiveTasks returns tasks currently assigned to or running on a bot.
+func (s *Store) ListActiveTasks(ctx context.Context) ([]*taskpb.Task, error) {
+	rows, err := s.pool.Query(ctx, `SELECT `+taskColumns+`
+		FROM tasks WHERE state IN ('ASSIGNED', 'RUNNING')
+		ORDER BY created_at ASC, id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("store: list active tasks: %w", err)
+	}
+	defer rows.Close()
+	var out []*taskpb.Task
+	for rows.Next() {
+		task, err := scanTask(rows)
+		if err != nil {
+			return nil, fmt.Errorf("store: scan active task: %w", err)
+		}
+		out = append(out, task)
+	}
+	return out, rows.Err()
+}

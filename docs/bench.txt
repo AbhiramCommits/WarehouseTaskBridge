@@ -1,0 +1,7 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/local/warehousetaskbridge/internal/scheduler
+cpu: Apple M3
+BenchmarkAssign-8   	     538	   2212344 ns/op	  222464 B/op	    2659 allocs/op
+PASS
+ok  	github.com/local/warehousetaskbridge/internal/scheduler	1.613s
