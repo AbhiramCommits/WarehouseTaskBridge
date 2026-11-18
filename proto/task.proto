@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+// Package warehouse.task.v1 is the internal wire schema for WarehouseTaskBridge.
+// It is deliberately richer and more structured than the external WMS schema.
+package warehouse.task.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/local/warehousetaskbridge/internal/taskpb;taskpb";
+
+// TaskType is the internal work classification.
+enum TaskType {
+  TASK_TYPE_UNSPECIFIED = 0;
+  PICK = 1;
+  PUT = 2;
+  MOVE = 3;
+  UNKNOWN = 4;
+}
+
+// TaskState is the internal lifecycle state of a task.
+enum TaskState {
+  TASK_STATE_UNSPECIFIED = 0;
+  PENDING = 1;
+  ASSIGNED = 2;
+  RUNNING = 3;
+  DONE = 4;
+  FAILED = 5;
+}
+
+// Task is the internal representation of a unit of warehouse work.
+message Task {
+  string id = 1;
+  string order_ref = 2;
+  TaskType task_type = 3;
+  int32 priority = 4;
+  string zone = 5;
+  string source_slot = 6;
+  string dest_slot = 7;
+  int32 quantity = 8;
+  TaskState state = 9;
+  string assigned_bot_id = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  string idempotency_key = 13;
+}
+
+// TaskStateEvent is an immutable lifecycle transition record. Its seq is the
+// durable outbox sequence and doubles as the monotonic StateSeq sent to the WMS.
+message TaskStateEvent {
+  string task_id = 1;
+  string order_ref = 2;
+  TaskState from_state = 3;
+  TaskState to_state = 4;
+  string bot_id = 5;
+  uint64 seq = 6;
+  google.protobuf.Timestamp emitted_at = 7;
+  string reason = 8;
+}

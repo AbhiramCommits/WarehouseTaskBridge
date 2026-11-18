@@ -1,0 +1,24 @@
+# Go build output
+/bin/
+/bridge
+/fakewms
+*.test
+*.exe
+
+# Coverage and profiling
+coverage.out
+coverage.html
+*.prof
+*.pprof
+
+# Local environment
+.env
+.env.*
+
+# Editor/OS noise
+.DS_Store
+.idea/
+.vscode/
+
+# Testcontainers / local logs
+*.log
