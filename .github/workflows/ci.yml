@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Format, vet, lint, unit tests, fuzz
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt reported unformatted files:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.13.2
+
+      - name: Unit tests with race detector and coverage
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Short fuzz run
+        run: go test -run=XXX -fuzz=FuzzParseSlot -fuzztime=30s ./internal/translate/
+
+  integration:
+    name: Testcontainers integration suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # GitHub-hosted runners provide a Docker daemon; Testcontainers starts
+      # disposable PostgreSQL and NATS JetStream containers per test.
+      - name: Verify Docker daemon
+        run: docker info
+
+      - name: Integration tests with race detector
+        run: go test -race -tags=integration ./...

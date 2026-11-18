@@ -66,10 +66,9 @@ type sentMessage struct {
 }
 
 type fakeSender struct {
-	mu        sync.Mutex
-	sent      []sentMessage
-	failSeq   map[uint64]int
-	available bool
+	mu      sync.Mutex
+	sent    []sentMessage
+	failSeq map[uint64]int
 }
 
 func newFakeSender() *fakeSender {
