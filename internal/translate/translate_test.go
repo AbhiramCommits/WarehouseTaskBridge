@@ -119,6 +119,7 @@ func TestToInternalWarnings(t *testing.T) {
 		{name: "unknown priority", mutate: func(w *wms.WorkOrder) { w.PriorityBand = "NOW" }, code: CodeUnknownPriorityBand},
 		{name: "dropped client meta", mutate: func(w *wms.WorkOrder) { w.ClientMeta = map[string]string{"po": "42"} }, code: CodeDroppedClientMeta},
 		{name: "missing due by", mutate: func(w *wms.WorkOrder) { w.DueBy = nil }, code: CodeMissingDueBy},
+		{name: "dropped due by", mutate: func(w *wms.WorkOrder) { due := time.Now(); w.DueBy = &due }, code: CodeDroppedDueBy},
 		{name: "unknown schema", mutate: func(w *wms.WorkOrder) { w.SchemaVersion = "1999-01-01" }, code: CodeUnknownSchemaVersion},
 	}
 	for _, tc := range tests {
@@ -333,7 +334,7 @@ func TestReconciliationReportSampleCorpus(t *testing.T) {
 	if snap.Total == 0 {
 		t.Fatal("reconciliation report has no warning counts for the sample corpus")
 	}
-	for _, required := range []string{CodeUnmappedKind, CodeDroppedClientMeta, CodeMissingDueBy, CodeUnknownPriorityBand} {
+	for _, required := range []string{CodeUnmappedKind, CodeDroppedClientMeta, CodeMissingDueBy, CodeDroppedDueBy, CodeUnknownPriorityBand} {
 		found := false
 		for _, e := range snap.Warnings {
 			if e.Code == required && e.Count > 0 {

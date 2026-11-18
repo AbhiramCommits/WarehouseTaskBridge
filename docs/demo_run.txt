@@ -1,11 +1,11 @@
 # WarehouseTaskBridge reproducible demo
-# date: 2026-11-18T23:24:38Z
+# date: 2026-11-18T23:29:42Z
 # seed: 424242, orders: 1000, dup-rate: 0.15, malformed-rate: 0.05, unmapped-kind-rate: 0.08
 # transport: mixed, go-silent-after: 8s, silent-for: 12s
 
 [fakewms] going silent at t=8.0s (heartbeats paused, status subscription detached)
 [fakewms] recovered at t=20.0s (status subscription reattached)
-[fakewms] sent 1200 messages (1000 unique, 150 duplicates, 50 malformed) in 22.7s; waiting for completion
+[fakewms] sent 1200 messages (1000 unique, 150 duplicates, 50 malformed) in 22.5s; waiting for completion
 
 === WarehouseTaskBridge fake-WMS report ===
 orders sent .................. 1200
@@ -18,13 +18,14 @@ status updates received ...... 3116
 out-of-order detections ...... 0
 duplicate deliveries ......... 0
 events published / lost ...... 3116 / 0
-end-to-end latency p50/p95/max 1617.0 / 10964.0 / 12130.0 ms
+end-to-end latency p50/p95/max 2691.0 / 10944.0 / 12117.0 ms
 peer silence events .......... 1 (buffered 100, drained 100, gaps 0)
 final states ................. map[COMPLETE:1000]
-run duration ................. 22.94s
+run duration ................. 22.77s
 
 reconciliation warning counts:
   DROPPED_CLIENT_META      334
+  DROPPED_DUE_BY           750
   MISSING_DUE_BY           250
   UNMAPPED_KIND            85
 

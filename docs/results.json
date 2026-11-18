@@ -13,9 +13,9 @@
   "events_lost": 0,
   "send_errors": 0,
   "latency_ms": {
-    "p50": 1617,
-    "p95": 10964,
-    "max": 12130
+    "p50": 2691,
+    "p95": 10944,
+    "max": 12117
   },
   "peer_silence": {
     "silence_events": 1,
@@ -1029,11 +1029,15 @@
     "ORD-001000": "COMPLETE"
   },
   "reconciliation": {
-    "total": 669,
+    "total": 1419,
     "warnings": [
       {
         "code": "DROPPED_CLIENT_META",
         "count": 334
+      },
+      {
+        "code": "DROPPED_DUE_BY",
+        "count": 750
       },
       {
         "code": "MISSING_DUE_BY",
@@ -1045,7 +1049,7 @@
       }
     ]
   },
-  "duration_seconds": 22.94,
+  "duration_seconds": 22.77,
   "orders_received_counter": 1200,
   "orders_deduped_counter": 150,
   "seed": 424242

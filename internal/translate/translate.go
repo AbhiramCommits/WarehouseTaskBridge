@@ -28,6 +28,7 @@ const (
 	CodeLossyStateCollapse   = "LOSSY_STATE_COLLAPSE"
 	CodeDroppedClientMeta    = "DROPPED_CLIENT_META"
 	CodeMissingDueBy         = "MISSING_DUE_BY"
+	CodeDroppedDueBy         = "DROPPED_DUE_BY"
 	CodeUnparseableSlot      = "UNPARSEABLE_SLOT"
 	CodeUnknownSchemaVersion = "UNKNOWN_SCHEMA_VERSION"
 	CodeInvalidQuantity      = "INVALID_QUANTITY"
@@ -268,6 +269,13 @@ func ToInternal(wo wms.WorkOrder) (*taskpb.Task, []Warning, error) {
 			Code:     CodeMissingDueBy,
 			Field:    "due_by",
 			Detail:   "no due_by supplied; task is scheduled purely by priority band",
+			Severity: SeverityInfo,
+		})
+	} else {
+		warnings = append(warnings, Warning{
+			Code:     CodeDroppedDueBy,
+			Field:    "due_by",
+			Detail:   "due_by has no internal field and is not persisted; scheduling uses priority, zone, and travel cost",
 			Severity: SeverityInfo,
 		})
 	}

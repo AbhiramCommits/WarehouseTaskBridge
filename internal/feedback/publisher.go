@@ -259,7 +259,14 @@ func (p *Publisher) DrainOnce(ctx context.Context) error {
 }
 
 func (p *Publisher) publishEvent(ctx context.Context, ev *taskpb.TaskStateEvent) error {
-	update, _ := translate.ToExternal(ev)
+	update, warnings := translate.ToExternal(ev)
+	for _, warning := range warnings {
+		if warning.Code == translate.CodeLossyStateCollapse {
+			p.counters.Inc(metrics.LossyStateCollapses)
+			p.logger.Debug("lossy external state collapse",
+				"order_ref", ev.OrderRef, "seq", ev.Seq, "detail", warning.Detail)
+		}
+	}
 	data, err := json.Marshal(update)
 	if err != nil {
 		return fmt.Errorf("feedback: marshal update for seq %d: %w", ev.Seq, err)

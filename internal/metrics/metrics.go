@@ -11,20 +11,21 @@ import (
 
 // Canonical counter names.
 const (
-	OrdersReceived    = "orders_received"
-	TasksCreated      = "tasks_created"
-	OrdersDeduped     = "orders_deduped"
-	Quarantined       = "quarantined"
-	TasksAssigned     = "tasks_assigned"
-	EventsPublished   = "events_published"
-	PeerSilenceEvents = "peer_silence_events"
-	EventsBuffered    = "events_buffered"
-	EventsDrained     = "events_drained"
-	OrderGapsDetected = "order_gaps_detected"
-	TasksCompleted    = "tasks_completed"
-	TasksFailed       = "tasks_failed"
-	TasksRequeued     = "tasks_requeued"
-	PublishFailures   = "publish_failures"
+	OrdersReceived      = "orders_received"
+	TasksCreated        = "tasks_created"
+	OrdersDeduped       = "orders_deduped"
+	Quarantined         = "quarantined"
+	TasksAssigned       = "tasks_assigned"
+	EventsPublished     = "events_published"
+	PeerSilenceEvents   = "peer_silence_events"
+	EventsBuffered      = "events_buffered"
+	EventsDrained       = "events_drained"
+	OrderGapsDetected   = "order_gaps_detected"
+	TasksCompleted      = "tasks_completed"
+	TasksFailed         = "tasks_failed"
+	TasksRequeued       = "tasks_requeued"
+	PublishFailures     = "publish_failures"
+	LossyStateCollapses = "lossy_state_collapses"
 )
 
 // Counters is a concurrency-safe set of named monotonic counters.
