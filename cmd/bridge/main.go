@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -15,9 +14,14 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/local/warehousetaskbridge/internal/config"
+	"github.com/local/warehousetaskbridge/internal/ingest"
+	"github.com/local/warehousetaskbridge/internal/metrics"
+	"github.com/local/warehousetaskbridge/internal/peer"
 	"github.com/local/warehousetaskbridge/internal/store"
+	"github.com/local/warehousetaskbridge/internal/translate"
 )
 
 func main() {
@@ -49,66 +53,89 @@ func run(logger *slog.Logger) error {
 	if err := db.Migrate(startCtx); err != nil {
 		return err
 	}
-	logger.Info("database ready", "addr", cfg.PostgresDSN)
+	logger.Info("database ready", "dsn", cfg.PostgresDSN)
 
 	nc, err := nats.Connect(cfg.NATSURL, nats.Name("warehousetaskbridge"), nats.Timeout(10*time.Second))
 	if err != nil {
 		return fmt.Errorf("connect nats: %w", err)
 	}
 	defer nc.Close()
+	js, err := nc.JetStream(nats.MaxWait(10 * time.Second))
+	if err != nil {
+		return fmt.Errorf("jetstream context: %w", err)
+	}
 	logger.Info("nats connected", "url", cfg.NATSURL)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, logger, http.StatusOK, map[string]string{
-			"status":   "ok",
-			"database": pingStatus(r.Context(), db),
-			"nats":     nc.Status().String(),
-		})
-	})
+	counters := metrics.New()
+	report := translate.NewReconciliationReport()
 
+	acceptor := ingest.NewAcceptor(db, counters, report, logger)
+	natsIngest, err := ingest.NewNATSIngester(nc, js, acceptor, logger)
+	if err != nil {
+		return err
+	}
+	if err := natsIngest.EnsureStream(); err != nil {
+		return err
+	}
+	acceptor.SetQuarantineSink(natsIngest.QuarantineMirror())
+
+	watcher := peer.NewWatcher(peer.WatcherConfig{
+		PeerID:   peer.DefaultPeerID,
+		Timeout:  cfg.PeerSilenceTimeout,
+		Counters: counters,
+		Logger:   logger,
+	})
+	heartbeat, err := peer.NewHeartbeat(peer.HeartbeatConfig{
+		Conn:     nc,
+		Store:    db,
+		Watcher:  watcher,
+		Interval: cfg.HeartbeatInterval,
+		PeerID:   peer.DefaultPeerID,
+		Counters: counters,
+		Logger:   logger,
+	})
+	if err != nil {
+		return err
+	}
+
+	handler := ingest.NewHTTPHandler(ingest.HTTPConfig{
+		Store:    db,
+		Acceptor: acceptor,
+		Report:   report,
+		Metrics:  counters,
+		Logger:   logger,
+	})
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	errCh := make(chan error, 1)
-	go func() {
+
+	group, gctx := errgroup.WithContext(ctx)
+	group.Go(func() error {
 		logger.Info("http listening", "addr", cfg.HTTPAddr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errCh <- err
+			return err
 		}
-	}()
+		return nil
+	})
+	group.Go(func() error {
+		<-gctx.Done()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
+		return srv.Shutdown(shutdownCtx)
+	})
+	group.Go(func() error { return natsIngest.Run(gctx) })
+	group.Go(func() error { return heartbeat.Run(gctx) })
+	group.Go(func() error {
+		watcher.Run(gctx, cfg.PeerSilenceTimeout/4)
+		return nil
+	})
 
-	select {
-	case err := <-errCh:
+	err = group.Wait()
+	if err != nil && !errors.Is(err, context.Canceled) {
 		return err
-	case <-ctx.Done():
-		logger.Info("shutdown signal received")
-	}
-
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer shutdownCancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("http shutdown: %w", err)
 	}
 	logger.Info("bridge stopped")
 	return nil
-}
-
-func pingStatus(ctx context.Context, db *store.Store) string {
-	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	if err := db.Ping(pingCtx); err != nil {
-		return "unavailable"
-	}
-	return "ok"
-}
-
-func writeJSON(w http.ResponseWriter, logger *slog.Logger, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(body); err != nil {
-		logger.Error("write json response", "error", err)
-	}
 }
